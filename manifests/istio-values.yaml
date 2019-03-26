@@ -1,0 +1,174 @@
+sds:
+  # SDS enabled. IF set to true, mTLS certificates for the sidecars will be
+  # distributed through the SecretDiscoveryService instead of using K8S secrets to mount the certificates.
+  enabled: true
+  udsPath: "unix:/var/run/sds/uds_path"
+  useNormalJwt: true
+
+# Default mtls policy. If true, mtls between services will be enabled by default.
+mtls:
+  # Default setting for service-to-service mtls. Can be set explicitly using
+  # destination rules or service annotations.
+  enabled: true
+
+tracing:
+  enabled: true
+  # replicaCount: 1
+  # resources:
+  #   requests:
+  #     cpu: 500m
+  #     memory: 256Mi
+
+grafana:
+  enabled: true
+  security:
+    enabled: false
+  contextPath: /
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 512Mi
+
+telemetry-gateway:
+  grafanaEnabled: true
+
+kiali:
+  enabled: true
+  contextPath: /
+  resources:
+    requests:
+      cpu: 500m
+      memory: 256Mi
+
+pilot:
+  autoscaleMin: 3
+  autoscaleMax: 5
+  traceSampling: 100
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+galley:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 256Mi
+
+mixer:
+  autoscaleMin: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1024Mi
+
+prometheus:
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 2048Mi
+
+security:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 256Mi
+
+sidecarInjectorWebhook:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 256Mi
+
+#
+# Gateways Configuration
+# By default (if enabled) a pair of Ingress and Egress Gateways will be created for the mesh.
+# You can add more gateways in addition to the defaults but make sure those are uniquely named
+# and that NodePorts are not conflicting.
+# Disable specifc gateway by setting the `enabled` to false.
+#
+gateways:
+  enabled: true
+
+  istio-ingressgateway:
+    enabled: true
+    labels:
+      app: istio-ingressgateway
+      istio: ingressgateway
+    replicaCount: 1
+    autoscaleMin: 3
+    autoscaleMax: 5
+    resources:
+      requests:
+        cpu: 500m
+        memory: 256Mi
+    cpu:
+      targetAverageUtilization: 80
+    loadBalancerIP: ""
+    serviceAnnotations: {}
+    type: LoadBalancer #change to NodePort, ClusterIP or LoadBalancer if need be
+    # Uncomment the following line to preserve client source ip.
+    externalTrafficPolicy: Local
+
+    ports:
+      ## You can add custom gateway ports
+    - port: 80
+      targetPort: 80
+      name: http2
+      nodePort: 31380
+    - port: 443
+      name: https
+      nodePort: 31390
+    # # Pilot and Citadel MTLS ports are enabled in gateway - but will only redirect
+    # # to pilot/citadel if global.meshExpansion settings are enabled.
+    # - port: 15011
+    #   targetPort: 15011
+    #   name: tcp-pilot-grpc-tls
+    # - port: 8060
+    #   targetPort: 8060
+    #   name: tcp-citadel-grpc-tls
+    # - port: 853
+    #   targetPort: 853
+    #   name: tcp-dns-tls
+    # - port: 15030
+    #   targetPort: 15030
+    #   name: http2-prometheus
+    # - port: 15031
+    #   targetPort: 15031
+    #   name: http2-grafana
+    secretVolumes:
+    - name: ingressgateway-certs
+      secretName: istio-ingressgateway-certs
+      mountPath: /etc/istio/ingressgateway-certs
+    - name: ingressgateway-ca-certs
+      secretName: istio-ingressgateway-ca-certs
+      mountPath: /etc/istio/ingressgateway-ca-certs
+
+  istio-egressgateway:
+    enabled: true
+    labels:
+      app: istio-egressgateway
+      istio: egressgateway
+    replicaCount: 1
+    autoscaleMin: 3
+    autoscaleMax: 5
+    resources:
+        requests:
+            cpu: 500m
+            memory: 256Mi   
+    cpu:
+      targetAverageUtilization: 80
+    serviceAnnotations: {}
+    type: ClusterIP #change to NodePort or LoadBalancer if need be
+    ports:
+      - port: 80
+        name: http2
+      - port: 443
+        name: https
+    secretVolumes:
+      - name: egressgateway-certs
+        secretName: istio-egressgateway-certs
+        mountPath: /etc/istio/egressgateway-certs
+      - name: egressgateway-ca-certs
+        secretName: istio-egressgateway-ca-certs
+        mountPath: /etc/istio/egressgateway-ca-certs

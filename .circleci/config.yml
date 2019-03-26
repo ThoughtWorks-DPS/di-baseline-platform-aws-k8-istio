@@ -1,0 +1,160 @@
+version: 2.0
+
+defaults: &defaults
+  working_directory: ~/di-baseline-platform-aws-k8-istio
+  environment:
+    BASH_ENV: local.env
+    ISTIO_VERSION: 1.1.1
+    KOPS_STATE_STORE: s3://rdc-di-nonprod-state
+    REGION: "us-west-2"
+    AWS_DEFAULT_REGION: "us-west-2"
+    AUTOSCALER_IMAGE: "k8s.gcr.io/cluster-autoscaler:v1.3.8"
+    MIN_NODES: "2"
+    MAX_NODES: "4"
+  docker:
+    - image: quay.io/thoughtworks_aelab/di-circleci-platform-agent:3.9.27
+
+jobs:
+
+  setup-addons:
+    <<: *defaults
+
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: confirm Docker
+          command: docker info
+      - run:
+          name: setup aws profile
+          command: bash bin/setup_profile.sh $di_nonprod_user_key $di_nonprod_user_secret $REGION
+      - run:
+          name: assume kops role
+          command: source bin/setup_assume_role.sh $nonprod_kops_role $REGION
+      - run:
+          name: get admin kubectl context
+          command: kops export kubecfg k8.nonprod.twdps.io
+      - run:
+         name: deploy metrics-server
+         # https://github.com/kubernetes-incubator/metrics-server
+         comand: kubectl apply -f metrics-server/1.8+/
+      - run:
+          name: deploy cluster autoscaler
+          command: kubectl apply -f manifests/hpa.yaml
+      - run:
+          name: setup logzio 
+          command: kubectl apply -f manifests/logz-io-fluentd.yml
+
+  delete-addons:
+    <<: *defaults
+
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: confirm Docker
+          command: docker info
+      - run:
+          name: setup aws profile
+          command: bash bin/setup_profile.sh $di_nonprod_user_key $di_nonprod_user_secret $REGION
+      - run:
+          name: assume kops role
+          command: source bin/setup_assume_role.sh $nonprod_kops_role $REGION
+      - run:
+          name: get admin kubectl context
+          command: kops export kubecfg k8.nonprod.twdps.io
+      - run:
+          name: deploy cluster autoscaler
+          command: kubectl delete -f manifests/hpa.yaml
+      - run:
+         name: deploy metrics-server
+         # https://github.com/kubernetes-incubator/metrics-server
+         comand: kubectl apply -f metrics-server/1.8+/
+      - run:
+          name: setup logzio 
+          command: kubectl apply -f manifests/logz-io-fluentd.yml
+
+
+  install-istio-nonprod:
+    <<: *defaults
+
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: confirm Docker
+          command: docker info
+      - run:
+          name: decrypt secrets
+          command: invoke dec
+      - run:
+          name: setup aws profile
+          command: bash bin/setup_profile.sh $di_nonprod_user_key $di_nonprod_user_secret $REGION
+      - run:
+          name: assume kops role
+          command: source bin/setup_assume_role.sh $nonprod_kops_role $REGION
+      - run:
+          name: get admin kubectl context
+          command: kops export kubecfg k8.nonprod.twdps.io
+      - run:
+          name: setup namespaces
+          command: bash bin/setup_namespaces.sh
+      - run:
+          name: setup secrets for observability
+          command: bash bin/create_addon_secret.sh
+      - run:
+          name: install istio
+          command: bash bin/setup_istio_default.sh nonprod
+      - run:
+          name: Setup ELB for Ingress to use certs from Amazon Cert Manager
+          command: bash bin/setup_elb_https.sh nonprod
+      - run:
+          name: setup ingress gateways
+          command: bash bin/setup_gateways.sh nonprod
+      - run:
+          name: setup DNS
+          command: bash bin/create_dns.sh nonprod
+
+
+  delete-istio-nonprod:
+    <<: *defaults
+
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: decrypt secrets
+          command: invoke dec
+      - run:
+          name: setup aws profile
+          command: bash bin/setup_profile.sh $di_nonprod_user_key $di_nonprod_user_secret $REGION
+      - run:
+          name: assume kops role
+          command: source bin/setup_assume_role.sh $nonprod_kops_role $REGION
+      - run:
+          name: get admin kubectl context
+          command: kops export kubecfg k8.nonprod.twdps.io
+      - run: 
+          name: delete ingress gateways
+          command: bash bin/delete_gateways.sh nonprod
+      - run:
+          name: delete DNS
+          command: bash bin/delete_dns.sh nonprod
+      - run:
+          name: delete istio
+          command: bash bin/delete_istio.sh nonprod
+
+
+workflows:
+ di-baseline-platform-aws-k8-istio:
+   jobs:
+     - install-istio-nonprod:
+         use_honeycomb: true
+     # next job deployed sonabouy for e2e validation
+     - approve-delete:
+         type: approval
+         requires:
+           - install-istio-nonprod
+     - delete-istio-nonprod:
+         requires:
+           - approve-delete

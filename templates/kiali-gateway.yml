@@ -1,0 +1,54 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: kiali-gateway
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway # use istio default controller
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "kiali.{{ENVIRONMENT}}.twdps.io"
+    tls:
+      httpsRedirect: true # sends 301 redirect for http requests  
+  - port:
+      number: 443
+      name: https #make sure the name is the same as the port on the ingress
+      protocol: HTTP
+    hosts:
+    - "kiali.{{ENVIRONMENT}}.twdps.io"
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: kiali
+  namespace: istio-system
+spec:
+  host: kiali
+  trafficPolicy:
+    tls:
+      mode: DISABLE   
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: kiali-service
+  namespace: istio-system
+spec:
+  hosts:
+  - "kiali.{{ENVIRONMENT}}.twdps.io"
+  gateways:
+  - kiali-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: kiali
+        port:
+          number: 20001

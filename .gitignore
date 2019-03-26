@@ -1,0 +1,10 @@
+# Compiled files
+*.tfstate
+*.tfstate.backup
+local.env
+# Module directory
+.terraform/
+
+*.env
+Gemfile.lock
+*.id_rsa

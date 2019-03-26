@@ -7,7 +7,7 @@ ENVIRONMENT=$1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MANIFESTS_DIR=$SCRIPT_DIR/../manifests
-
+ISTIO_DIR=$SCRIPT_DIR/../istio-$ISTIO_VERSION
 
 echo "Downloading Istio version $ISTIO_VERSION..."
 ARTIFACT_NAME="istio-$ISTIO_VERSION-linux.tar.gz"
@@ -19,7 +19,7 @@ echo "Extracting..."
 tar xzf "$ARTIFACT_NAME"
 
 # first install CRDs
-helm template $SCRIPT_DIR/istio-$ISTIO_VERSION/install/kubernetes/helm/istio-init --name istio-init \
+helm template $ISTIO_DIR/install/kubernetes/helm/istio-init --name istio-init \
 --namespace istio-system \
 --values "$MANIFESTS_DIR/istio-init-values.yaml" | kubectl apply -f -
 
@@ -34,7 +34,7 @@ done
 
 echo "Applying Istio..."
 helm template \
-    $SCRIPT_DIR/istio-$ISTIO_VERSION/install/kubernetes/helm/istio \
+    $ISTIO_DIR/install/kubernetes/helm/istio \
     --set kiali.dashboard.jaegerURL=https://jaeger.$ENVIRONMENT.twdps.io \
     --set kiali.dashboard.grafanaURL=https://grafana.$ENVIRONMENT.twdps.io \
     --values "$MANIFESTS_DIR/istio-values.yaml" \
@@ -51,4 +51,4 @@ done
 
 echo
 echo "install book info"
-kubectl apply -f $SCRIPT_DIR/istio-$ISTIO_VERSION/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f $ISTIO_DIR/samples/bookinfo/platform/kube/bookinfo.yaml
